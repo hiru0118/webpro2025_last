@@ -60,6 +60,25 @@ async function main() {
       },
     },
   });
+
+  const restaurantMiso = await prisma.restaurant.create({
+    data: {
+      name: '味噌の仙人',
+      cuisine: 'ラーメン',
+      priceRange: '¥¥',
+      description: '濃厚な味噌と太麺が絡み合う、食べ応え抜群の一杯。',
+      restaurantAnswers: {
+        create: [
+          { questionId: q1.id, answerOptionId: yes.id },   // ラーメンですか？ -> はい
+          { questionId: q2.id, answerOptionId: no.id },   // イタリアンですか？ -> いいえ
+          { questionId: q3.id, answerOptionId: no.id },   // 2000円以上？ -> いいえ
+          { questionId: q4.id, answerOptionId: maybe.id },// オシャレ？ -> たぶんそう
+        ],
+      },
+    },
+  });
+
+
   console.log('飲食店と回答の関連を作成しました。');
   console.log(`シード処理が完了しました。`);
 }

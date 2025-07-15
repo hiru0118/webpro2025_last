@@ -8,34 +8,41 @@
         #akinator-box { width: 80%; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 10px; }
         #question-area { min-height: 50px; font-size: 1.5em; margin-bottom: 30px; }
         #answer-options button { font-size: 1em; padding: 10px 20px; margin: 5px; cursor: pointer; }
+        #result-area { font-size: 1.2em; }
     </style>
 </head>
 <body>
     <div id="akinator-box">
         <h1>飲食店アキネーター</h1>
-        <div id="question-area">
-            <p>...</p>
-        </div>
-        <div id="answer-options">
+        <div id="game-area">
+            <div id="question-area">
+                <p>...</p>
             </div>
+            <div id="answer-options"></div>
+        </div>
+        <div id="result-area" style="display: none;"></div>
     </div>
 
     <script>
+        const gameArea = document.getElementById('game-area');
         const questionArea = document.getElementById('question-area');
         const answerOptionsArea = document.getElementById('answer-options');
+        const resultArea = document.getElementById('result-area');
+        
+        let userAnswers = []; // ★ユーザーの回答履歴を保持する配列
 
-        // 次の質問を取得して表示する関数
-        async function fetchNextQuestion() {
-            questionArea.innerHTML = '<p>次の質問を考えています...</p>';
+        // 最初の質問を取得してゲーム開始
+        async function startGame() {
+            const response = await fetch('/api/akinator/start');
+            const data = await response.json();
+            displayQuestion(data);
+        }
+
+        // 質問と選択肢を表示する関数
+        function displayQuestion(data) {
+            questionArea.innerHTML = `<p>${data.question.text}</p>`;
             answerOptionsArea.innerHTML = '';
 
-            const response = await fetch('/api/question/next');
-            const data = await response.json();
-
-            // 質問を表示
-            questionArea.innerHTML = `<p>${data.question.text}</p>`;
-
-            // 回答選択肢をボタンとして表示
             data.answerOptions.forEach(option => {
                 const button = document.createElement('button');
                 button.textContent = option.text;
@@ -48,24 +55,106 @@
 
         // 回答がクリックされたときの処理
         async function handleAnswer(event) {
-            const { questionId, answerOptionId } = event.target.dataset;
-            
-            // 回答をサーバーに送信
-            await fetch('/api/answer', {
+            const questionId = parseInt(event.target.dataset.questionId);
+            const answerOptionId = parseInt(event.target.dataset.answerOptionId);
+
+            // 回答履歴に今回の回答を追加
+            userAnswers.push({ questionId, answerOptionId });
+
+            // 次の状態（次の質問 or 結果）をサーバーに問い合わせる
+            const response = await fetch('/api/akinator/next', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    questionId: parseInt(questionId), 
-                    answerOptionId: parseInt(answerOptionId)
-                }),
+                body: JSON.stringify({ answers: userAnswers }), // 回答履歴を丸ごと送る
             });
-            
-            // 次の質問を取得・表示
-            fetchNextQuestion();
-        }
+            const data = await response.json();
 
-        // ページ読み込み時に最初の質問を取得
-        fetchNextQuestion();
+            if (data.result !== undefined) {
+                // 結果が返ってきた場合
+                displayResult(data.result);
+            } else {
+                // 次の質問が返ってきた場合
+                displayQuestion(data);
+            }
+        }
+        
+        // public/index.html の <script>タグの中
+
+// ... (他の関数はそのまま) ...
+
+// 最終結果を表示する関数
+function displayResult(restaurant) {
+    gameArea.style.display = 'none';
+    resultArea.style.display = 'block';
+
+    if (restaurant) {
+        // (ここは変更なし)
+        resultArea.innerHTML = `
+            <h2>あなたが考えているのは...</h2>
+            <h3>${restaurant.name}</h3>
+            <p>ジャンル: ${restaurant.cuisine || '未分類'}</p>
+            <p>${restaurant.description || ''}</p>
+            <hr>
+            <button onclick="window.location.reload()">もう一度遊ぶ</button>
+        `;
+    } else {
+            // ★★★ 降参した場合の表示を、ラジオボタン付きに改造 ★★★
+            resultArea.innerHTML = `
+                <h2>むむ... 降参じゃ...</h2>
+                <p>あなたが考えている飲食店は、わしの知識にはないようです。</p>
+                <p>よろしければ、その店の名前と、その店を当てるのに役立つ質問、そしてその質問への答えを教えてはくれんかの？</p>
+                <form id="register-form">
+                    <input type="text" id="new-restaurant-name" placeholder="飲食店の名前" required style="width: 90%; margin-bottom: 10px;">
+                    <input type="text" id="new-question-text" placeholder="（例：個室がありますか？）" required style="width: 90%; margin-bottom: 10px;">
+                    <div>
+                        <label><input type="radio" name="answer" value="yes" checked> はい</label>
+                        <label><input type="radio" name="answer" value="no"> いいえ</label>
+                    </div>
+                    <button type="submit" style="margin-top: 10px;">この店と質問で登録する</button>
+                </form>
+                <hr>
+                <button onclick="window.location.reload()">いや、やめておく</button>
+            `;
+            
+            document.getElementById('register-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newName = document.getElementById('new-restaurant-name').value;
+                const newQuestion = document.getElementById('new-question-text').value;
+                const answerValue = document.querySelector('input[name="answer"]:checked').value;
+
+                const response = await fetch('/api/restaurants/register-with-new-question', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name: newName, 
+                        question: newQuestion,
+                        answerValue: answerValue, // 'yes' or 'no'
+                        answers: userAnswers 
+                    }),
+                });
+                // ... (以降の処理は同じ)
+           
+
+            if (response.ok) {
+                // ... (成功時の処理は、手順2のAPIを作ってから考える)
+                resultArea.innerHTML = `
+                    <h2>感謝するぞ！</h2>
+                    <p>新しい知識を覚えた！これでわしも、また一つ賢くなったわい。</p>
+                    <hr>
+                    <button onclick="window.location.reload()">もう一度遊ぶ</button>
+                `;
+            } else {
+                const errorData = await response.json();
+                alert('登録に失敗しました: ' + errorData.error);
+            }
+        });
+    }
+}
+
+// ... (startGame()はそのまま) ...
+
+        // ゲーム開始
+        startGame();
     </script>
 </body>
 </html>
