@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>飲食店アキネーター</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
+        #akinator-box { width: 80%; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 10px; }
+        #question-area { min-height: 50px; font-size: 1.5em; margin-bottom: 30px; }
+        #answer-options button { font-size: 1em; padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="akinator-box">
+        <h1>飲食店アキネーター</h1>
+        <div id="question-area">
+            <p>...</p>
+        </div>
+        <div id="answer-options">
+            </div>
+    </div>
+
+    <script>
+        const questionArea = document.getElementById('question-area');
+        const answerOptionsArea = document.getElementById('answer-options');
+
+        // 次の質問を取得して表示する関数
+        async function fetchNextQuestion() {
+            questionArea.innerHTML = '<p>次の質問を考えています...</p>';
+            answerOptionsArea.innerHTML = '';
+
+            const response = await fetch('/api/question/next');
+            const data = await response.json();
+
+            // 質問を表示
+            questionArea.innerHTML = `<p>${data.question.text}</p>`;
+
+            // 回答選択肢をボタンとして表示
+            data.answerOptions.forEach(option => {
+                const button = document.createElement('button');
+                button.textContent = option.text;
+                button.dataset.questionId = data.question.id;
+                button.dataset.answerOptionId = option.id;
+                button.addEventListener('click', handleAnswer);
+                answerOptionsArea.appendChild(button);
+            });
+        }
+
+        // 回答がクリックされたときの処理
+        async function handleAnswer(event) {
+            const { questionId, answerOptionId } = event.target.dataset;
+            
+            // 回答をサーバーに送信
+            await fetch('/api/answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    questionId: parseInt(questionId), 
+                    answerOptionId: parseInt(answerOptionId)
+                }),
+            });
+            
+            // 次の質問を取得・表示
+            fetchNextQuestion();
+        }
+
+        // ページ読み込み時に最初の質問を取得
+        fetchNextQuestion();
+    </script>
+</body>
+</html>

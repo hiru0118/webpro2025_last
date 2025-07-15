@@ -1,0 +1,53 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ★★★ このモデルが消えていないか確認！ ★★★
+model Restaurant {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  cuisine     String?
+  priceRange  String?
+  createdAt   DateTime @default(now())
+
+  // RestaurantAnswerとのリレーションを追加
+  restaurantAnswers RestaurantAnswer[]
+}
+
+// --- ここからが追加したモデル ---
+
+model Question {
+  id    Int     @id @default(autoincrement())
+  text  String  @unique
+
+  restaurantAnswers RestaurantAnswer[]
+}
+
+model AnswerOption {
+  id    Int     @id @default(autoincrement())
+  text  String  @unique
+
+  restaurantAnswers RestaurantAnswer[]
+}
+
+model RestaurantAnswer {
+  id             Int      @id @default(autoincrement())
+
+  restaurantId   Int
+  questionId     Int
+  answerOptionId Int
+
+  restaurant     Restaurant   @relation(fields: [restaurantId], references: [id])
+  question       Question     @relation(fields: [questionId], references: [id])
+  answerOption   AnswerOption @relation(fields: [answerOptionId], references: [id])
+
+  @@unique([restaurantId, questionId])
+}
